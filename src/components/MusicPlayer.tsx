@@ -1,36 +1,7 @@
-// "use client";
-
-// // TODO: Import dependencies yang diperlukan
-// // import { motion } from "motion/react";
-// // import { ... } from "lucide-react";
-
-// export function MusicPlayer() {
-//   // TODO: Implementasikan state management untuk playing, paused, loading
-  
-//   // TODO: Implementasikan handler untuk play/pause
-  
-//   // TODO: Implementasikan komponen music player sesuai desain Figma
-//   // Struktur yang perlu dibuat:
-//   // - Container dengan background dan shadow animations
-//   // - Album artwork dengan rotation dan scale animations
-//   // - Equalizer bars dengan stagger effect
-//   // - Progress bar dengan fill animation
-//   // - Control buttons (play/pause, skip, volume)
-  
-//   return (
-//     <div className="w-full max-w-md">
-//       {/* TODO: Implementasikan music player di sini */}
-//       <p className="text-center text-gray-500">
-//         Mulai implementasi music player di sini oke
-//       </p>
-//     </div>
-//   );
-// }
-
 "use client";
 
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { motion } from "motion/react";
-import { useCallback, useEffect, useState } from "react";
 import {
   Shuffle,
   SkipBack,
@@ -42,270 +13,324 @@ import {
   Music,
 } from "lucide-react";
 
-type PlayerState = "playing" | "paused" | "loading";
 
+const ROTATION_DURATION_S = 20; 
+const CONTAINER_TRANSITION_MS = 300;
+const SCALE_TRANSITION_SPRING = { type: "spring", stiffness: 320, damping: 28 };
 const EQUALIZER_BAR_COUNT = 5;
-const LOADING_DURATION_MS = 500;
+const EQUALIZER_CYCLE_S = 0.5;
+const EQUALIZER_STAGGER_S = 0.1;
+const LOADING_SIM_MS = 500;
+const PROGRESS_TRANSITION_S = 0.3;
+const VOLUME_HOVER_TRANSITION_S = 0.2;
+const PROGRESS_TRACK_HEIGHT_PX = 8;
+const EQUALIZER_PLAY_HEIGHT_PX = 14;
+const EQUALIZER_PAUSE_HEIGHT_PX = 12;
+const EQUALIZER_LOADING_HEIGHT_PX = 20;
+const EQUALIZER_BAR_WIDTH_PX = 8;
 
-const containerVariants = {
-  playing: {
-    boxShadow: "0 0 40px rgba(168, 85, 247, 0.4)",
-    transition: { duration: 0.3, ease: "easeInOut" },
-  },
-  paused: {
-    boxShadow: "0 0 0 transparent",
-    transition: { duration: 0.3, ease: "easeInOut" },
-  },
-  loading: {
-    boxShadow: "0 0 0 transparent",
-    transition: { duration: 0.3, ease: "easeInOut" },
-  },
-};
 
-const albumScaleVariants = {
-  playing: { scale: 1, transition: { type: "spring", stiffness: 300, damping: 24 } },
-  paused: { scale: 0.95, transition: { type: "spring", stiffness: 300, damping: 24 } },
-  loading: { scale: 0.9, transition: { type: "spring", stiffness: 300, damping: 24 } },
-};
+const COLOR_PURPLE = "#a855f7"; 
+const COLOR_GRAY_500 = "#6b7280";
+const COLOR_GRAY_600 = "#4b5563";
+const COLOR_BG_PAUSED = "#0f172a";
+const COLOR_BG_PLAYING = "rgba(68,20,98,0.95)"; 
 
-export function MusicPlayer() {
-  const [playerState, setPlayerState] = useState<PlayerState>("paused");
-  const [progress, setProgress] = useState(35); // 1:23 / 3:45 ≈ 35%
-  const [volume, setVolume] = useState(70);
-  const [isVolumeHovered, setVolumeHovered] = useState(false);
+export enum PlayerState {
+  Playing = "playing",
+  Paused = "paused",
+  Loading = "loading",
+}
 
-  const togglePlayPause = useCallback(() => {
-    if (playerState === "loading") return;
-    setPlayerState("loading");
-    setTimeout(() => {
-      setPlayerState((prev) => (prev === "paused" ? "playing" : "paused"));
-    }, LOADING_DURATION_MS);
-  }, [playerState]);
+function Artwork({ state }: { state: PlayerState }) {
+  const variants = {
+    playing: {
+      rotate: [0, 360],
+      transition: {
+        rotate: { duration: ROTATION_DURATION_S, repeat: Infinity, ease: "linear" },
+      },
+    },
+    paused: { rotate: 0 },
+    loading: { rotate: 0 },
+  };
 
-  // Simulasi progress saat playing
-  useEffect(() => {
-    if (playerState !== "playing") return;
-    const interval = setInterval(() => {
-      setProgress((p) => (p >= 100 ? 0 : p + 0.5));
-    }, 1000);
-    return () => clearInterval(interval);
-  }, [playerState]);
-
-  const isPlayDisabled = playerState === "loading";
+  const scale = state === PlayerState.Playing ? 1 : state === PlayerState.Paused ? 0.95 : 0.9;
 
   return (
     <motion.div
-      className="w-full max-w-md overflow-hidden rounded-2xl bg-[var(--color-gray-900)] p-6"
-      variants={containerVariants}
-      initial="paused"
-      animate={playerState}
+      className="relative flex flex-shrink-0 overflow-hidden rounded-xl bg-gradient-to-br from-purple-500 to-pink-500"
+      initial={false}
+      animate={state === PlayerState.Playing ? "playing" : state === PlayerState.Loading ? "loading" : "paused"}
+      variants={variants}
+      style={{ width: 80, height: 80 }}
+    
+      transition={{ ...SCALE_TRANSITION_SPRING }}
+    
     >
-      <div className="flex gap-4">
-        {/* Album Artwork */}
-        <motion.div
-          className="relative flex flex-shrink-0 overflow-hidden rounded-xl bg-gradient-to-br from-purple-500 to-pink-500"
-          initial="paused"
-          animate={{
-            scale: albumScaleVariants[playerState].scale,
-            rotate: playerState === "playing" ? 360 : 0,
-          }}
-          transition={{
-            scale: albumScaleVariants[playerState].transition as object,
-            rotate:
-              playerState === "playing"
-                ? { duration: 20, repeat: Infinity, ease: "linear" }
-                : { duration: 0.3 },
-          }}
-          style={{ width: 80, height: 80 }}
-        >
-          <div className="absolute inset-0 flex items-center justify-center text-gray-900">
-            <Music size={36} strokeWidth={2} />
-          </div>
-        </motion.div>
-
-        <div className="min-w-0 flex-1">
-          <h2 className="truncate text-lg font-bold text-white">
-            Awesome Song Title
-          </h2>
-          <p className="truncate text-sm text-gray-400">Amazing Artist</p>
-
-          {/* Equalizer Bars */}
-          <div className="mt-2 flex items-end gap-0.5" style={{ height: 12 }}>
-            {Array.from({ length: EQUALIZER_BAR_COUNT }).map((_, i) => (
-              <EqualizerBar
-                key={i}
-                index={i}
-                state={playerState}
-              />
-            ))}
-          </div>
-        </div>
-      </div>
-
-      {/* Progress Bar */}
-      <div className="mt-4">
-        <motion.div
-          className="h-1 w-full overflow-hidden rounded-full bg-gray-700"
-          role="progressbar"
-          aria-valuenow={progress}
-          aria-valuemin={0}
-          aria-valuemax={100}
-        >
-          <motion.div
-            className="h-full rounded-full"
-            style={{
-              width: `${progress}%`,
-              backgroundColor:
-                playerState === "playing"
-                  ? "var(--color-purple-500)"
-                  : "var(--color-gray-500)",
-            }}
-            transition={{ duration: 0.3 }}
-          />
-        </motion.div>
-        <div className="mt-1 flex justify-between text-xs text-gray-400">
-          <span>1:23</span>
-          <span>3:45</span>
-        </div>
-      </div>
-
-      {/* Control Buttons */}
-      <div className="mt-4 flex items-center justify-center gap-2">
-        <ControlButton icon={<Shuffle size={18} />} label="Shuffle" />
-        <ControlButton icon={<SkipBack size={18} />} label="Previous" />
-        <motion.button
-          type="button"
-          className="flex h-12 w-12 items-center justify-center rounded-full text-white focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2 focus:ring-offset-gray-900 disabled:pointer-events-none"
-          style={{
-            backgroundColor: isPlayDisabled
-              ? "var(--color-gray-600)"
-              : "var(--color-purple-500)",
-          }}
-          onClick={togglePlayPause}
-          disabled={isPlayDisabled}
-          whileHover={!isPlayDisabled ? { scale: 1.05 } : undefined}
-          whileTap={!isPlayDisabled ? { scale: 0.95 } : undefined}
-          transition={{ type: "spring", stiffness: 400, damping: 17 }}
-          aria-label={playerState === "playing" ? "Pause" : "Play"}
-        >
-          {playerState === "playing" ? (
-            <Pause size={22} fill="currentColor" />
-          ) : (
-            <Play size={22} fill="currentColor" className="translate-x-0.5" />
-          )}
-        </motion.button>
-        <ControlButton icon={<SkipForward size={18} />} label="Next" />
-        <ControlButton icon={<Repeat size={18} />} label="Repeat" />
-      </div>
-
-      {/* Volume */}
-      <div
-        className="mt-4 flex items-center gap-2"
-        onMouseEnter={() => setVolumeHovered(true)}
-        onMouseLeave={() => setVolumeHovered(false)}
+      <motion.div
+        initial={false}
+        animate={{ scale }}
+        transition={{ ...SCALE_TRANSITION_SPRING, duration: CONTAINER_TRANSITION_MS / 1000 }}
+        className="absolute inset-0 flex items-center justify-center text-gray-900"
       >
-        <Volume2 size={18} className="flex-shrink-0 text-white" aria-hidden />
-        <div
-          className="relative h-1 flex-1 cursor-pointer rounded-full bg-gray-700"
-          role="slider"
-          aria-valuenow={volume}
-          aria-valuemin={0}
-          aria-valuemax={100}
-          aria-label="Volume"
-          onClick={(e) => {
-            const rect = e.currentTarget.getBoundingClientRect();
-            const pct = Math.round(
-              ((e.clientX - rect.left) / rect.width) * 100
-            );
-            setVolume(Math.min(100, Math.max(0, pct)));
-          }}
-        >
-          <motion.div
-            className="absolute inset-y-0 left-0 rounded-full"
-            style={{
-              width: `${volume}%`,
-              backgroundColor: isVolumeHovered
-                ? "var(--color-purple-500)"
-                : "var(--color-gray-500)",
-            }}
-            transition={{ duration: 0.2 }}
-          />
-        </div>
-      </div>
+        <Music size={36} strokeWidth={2} />
+      </motion.div>
     </motion.div>
   );
 }
 
-function ControlButton({
-  icon,
-  label,
-}: {
+/* EqualizerBar component */
+function EqualizerBar({ index, state }: { index: number; state: PlayerState }) {
+  const staggerDelay = index * EQUALIZER_STAGGER_S;
+
+  if (state === PlayerState.Loading) {
+    return (
+      <motion.div
+        className="rounded-sm bg-purple-500 origin-bottom"
+        initial={false}
+        animate={{ scaleY: [0.5, 1, 0.7], opacity: [0.6, 1, 0.8] }}
+        transition={{ duration: 0.6, repeat: Infinity, ease: "easeInOut", delay: staggerDelay }}
+        style={{ width: EQUALIZER_BAR_WIDTH_PX, height: EQUALIZER_LOADING_HEIGHT_PX }}
+      />
+    );
+  }
+
+  if (state === PlayerState.Paused) {
+    return (
+      <motion.div
+        className="rounded-sm bg-purple-500/80 origin-bottom"
+        initial={false}
+        animate={{ scaleY: 0.2, opacity: 1 }}
+        transition={{ duration: CONTAINER_TRANSITION_MS / 1000 }}
+        style={{ width: EQUALIZER_BAR_WIDTH_PX, height: EQUALIZER_PAUSE_HEIGHT_PX }}
+      />
+    );
+  }
+
+  // playing
+  return (
+    <motion.div
+      className="rounded-sm bg-purple-500 origin-bottom"
+      initial={false}
+      animate={{ scaleY: [0.2, 1] }}
+      transition={{
+        duration: EQUALIZER_CYCLE_S,
+        repeat: Infinity,
+        repeatType: "reverse",
+        ease: "easeInOut",
+        delay: staggerDelay,
+      }}
+      style={{ width: EQUALIZER_BAR_WIDTH_PX, height: EQUALIZER_PLAY_HEIGHT_PX }}
+    />
+  );
+}
+
+function Equalizer({ state }: { state: PlayerState }) {
+  const containerHeight = state === PlayerState.Loading ? EQUALIZER_LOADING_HEIGHT_PX : EQUALIZER_PLAY_HEIGHT_PX;
+  const gap = state === PlayerState.Loading ? 6 : 2; // px
+  return (
+    <div className="mt-2 flex items-end" style={{ height: containerHeight, gap }}>
+      {Array.from({ length: EQUALIZER_BAR_COUNT }).map((_, i) => (
+        <EqualizerBar key={i} index={i} state={state} />
+      ))}
+    </div>
+  );
+}
+
+
+function ProgressBar({ progress, state }: { progress: number; state: PlayerState }) {
+  const fillColor = state === PlayerState.Playing ? COLOR_PURPLE : COLOR_GRAY_500;
+  return (
+    <div className="mt-4">
+      <motion.div
+        className="w-full overflow-hidden rounded-full bg-gray-700"
+        role="progressbar"
+        aria-valuenow={progress}
+        aria-valuemin={0}
+        aria-valuemax={100}
+        style={{ height: PROGRESS_TRACK_HEIGHT_PX }}
+      >
+        <motion.div
+          className="h-full rounded-full"
+          style={{ width: `${progress}%`, backgroundColor: fillColor }}
+          transition={{ duration: PROGRESS_TRANSITION_S }}
+        />
+      </motion.div>
+
+      <div className="mt-2 flex justify-between text-xs text-gray-400">
+        <span>1:23</span>
+        <span>3:45</span>
+      </div>
+    </div>
+  );
+}
+
+
+function Spinner() {
+  return (
+    <motion.div animate={{ rotate: 360 }} transition={{ repeat: Infinity, duration: 1, ease: "linear" }} className="flex items-center justify-center">
+      <svg viewBox="0 0 24 24" className="w-6 h-6">
+        <circle cx="12" cy="12" r="10" stroke="rgba(255,255,255,0.12)" strokeWidth="3" fill="none" />
+        <path d="M22 12a10 10 0 0 1-10 10" stroke="white" strokeWidth="3" strokeLinecap="round" fill="none" />
+      </svg>
+    </motion.div>
+  );
+}
+
+type ControlButtonProps = {
   icon: React.ReactNode;
   label: string;
-}) {
+  onClick?: () => void;
+  disabled?: boolean;
+};
+function ControlButton({ icon, label, onClick, disabled }: ControlButtonProps) {
   return (
     <motion.button
       type="button"
+      onClick={onClick}
+      disabled={disabled}
+      aria-label={label}
       className="flex h-9 w-9 items-center justify-center rounded-full text-white/80 transition-colors hover:text-white focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2 focus:ring-offset-gray-900"
       whileTap={{ scale: 0.95 }}
+      style={{ opacity: disabled ? 0.45 : 1 }}
       transition={{ type: "spring", stiffness: 400, damping: 17 }}
-      aria-label={label}
     >
       {icon}
     </motion.button>
   );
 }
 
-function EqualizerBar({ index, state }: { index: number; state: PlayerState }) {
-  const staggerDelay = index * 0.1; // 100ms stagger
 
-  if (state === "loading") {
-    return (
-      <motion.div
-        className="w-1 rounded-sm bg-purple-500 origin-bottom"
-        initial={false}
-        animate={{
-          scaleY: 0.5,
-          opacity: 0.5,
-        }}
-        transition={{ duration: 0.3 }}
-        style={{ height: 12 }}
-      />
-    );
-  }
+function VolumeSlider({ volume, setVolume }: { volume: number; setVolume: (v: number) => void }) {
+  const [hovered, setHovered] = useState(false);
+  const handleClick = useCallback(
+    (e: React.MouseEvent<HTMLDivElement>) => {
+      const rect = e.currentTarget.getBoundingClientRect();
+      const pct = Math.round(((e.clientX - rect.left) / rect.width) * 100);
+      setVolume(Math.min(100, Math.max(0, pct)));
+    },
+    [setVolume]
+  );
 
-  if (state === "paused") {
-    return (
-      <motion.div
-        className="w-1 rounded-sm bg-purple-500/80 origin-bottom"
-        initial={false}
-        animate={{
-          scaleY: 0.2,
-          opacity: 1,
-        }}
-        transition={{ duration: 0.3 }}
-        style={{ height: 12 }}
-      />
-    );
-  }
-
-  // playing: scaleY 0.2 ↔ 1 dengan stagger & alternate
   return (
-    <motion.div
-      className="w-1 rounded-sm bg-purple-500 origin-bottom"
-      initial={false}
-      animate={{
-        scaleY: [0.2, 1, 0.2],
-        opacity: 1,
-      }}
-      transition={{
-        duration: 0.5,
-        repeat: Infinity,
-        ease: "easeInOut",
-        delay: staggerDelay,
-        times: [0, 0.5, 1],
-      }}
-      style={{ height: 12 }}
-    />
+    <div className="mt-4 flex items-center gap-2" onMouseEnter={() => setHovered(true)} onMouseLeave={() => setHovered(false)}>
+      <Volume2 size={18} className="flex-shrink-0 text-white" aria-hidden />
+      <div
+        className="relative h-1 flex-1 cursor-pointer rounded-full bg-gray-700"
+        role="slider"
+        aria-valuenow={volume}
+        aria-valuemin={0}
+        aria-valuemax={100}
+        onClick={handleClick}
+        style={{ height: 8 }}
+      >
+        <motion.div
+          className="absolute inset-y-0 left-0 rounded-full"
+          style={{ width: `${volume}%`, backgroundColor: hovered ? COLOR_PURPLE : COLOR_GRAY_500 }}
+          transition={{ duration: VOLUME_HOVER_TRANSITION_S }}
+        />
+      </div>
+    </div>
   );
 }
+
+export function MusicPlayer(): React.ReactElement {
+  const [playerState, setPlayerState] = useState<PlayerState>(PlayerState.Paused);
+  const [progress, setProgress] = useState<number>(35);
+  const [volume, setVolume] = useState<number>(70);
+
+  /* container variants */
+  const containerVariants = useMemo(
+    () => ({
+      playing: {
+        backgroundColor: COLOR_BG_PLAYING,
+        boxShadow: "0 0 40px rgba(168,85,247,0.45)",
+        transition: { duration: CONTAINER_TRANSITION_MS / 1000, ease: "easeInOut" },
+      },
+      paused: {
+        backgroundColor: COLOR_BG_PAUSED,
+        boxShadow: "0 0 0 transparent",
+        transition: { duration: CONTAINER_TRANSITION_MS / 1000, ease: "easeInOut" },
+      },
+      loading: {
+        backgroundColor: "rgba(24,24,27,1)",
+        boxShadow: "0 0 8px rgba(0,0,0,0.2)",
+        transition: { duration: CONTAINER_TRANSITION_MS / 1000, ease: "easeInOut" },
+      },
+    }),
+    []
+  );
+
+  const togglePlayPause = useCallback(() => {
+    if (playerState === PlayerState.Loading) return;
+    const target = playerState === PlayerState.Paused ? PlayerState.Playing : PlayerState.Paused;
+    setPlayerState(PlayerState.Loading);
+    setTimeout(() => {
+      setPlayerState(target);
+    }, LOADING_SIM_MS);
+  }, [playerState]);
+
+  useEffect(() => {
+    if (playerState !== PlayerState.Playing) return;
+    const id = setInterval(() => {
+      setProgress((p) => (p >= 100 ? 0 : +((p + 0.5).toFixed(2))));
+    }, 1000);
+    return () => clearInterval(id);
+  }, [playerState]);
+
+  const isPlayDisabled = playerState === PlayerState.Loading;
+
+  return (
+    <motion.div
+      className="w-full max-w-md overflow-hidden rounded-2xl p-16"
+      variants={containerVariants}
+      initial="paused"
+      animate={playerState}
+      style={{ backgroundColor: undefined as unknown as string }} // allow motion to animate background via variants
+    >
+      <div className="flex gap-8">
+        <Artwork state={playerState} />
+
+        <div className="min-w-0 flex-1">
+          <h2 className="truncate text-lg font-bold text-white">Awesome Song Title</h2>
+          <p className="truncate text-sm text-gray-400">Amazing Artist</p>
+
+          <div className="mt-8">
+            <Equalizer state={playerState} />
+          </div>
+        </div>
+      </div>
+
+      <div className="mt-6">
+        <ProgressBar progress={progress} state={playerState} />
+      </div>
+
+      <div className="mt-8 flex items-center justify-center gap-6">
+        <ControlButton icon={<Shuffle size={18} />} label="Shuffle" disabled={isPlayDisabled} />
+        <ControlButton icon={<SkipBack size={18} />} label="Previous" disabled={isPlayDisabled} />
+
+        <motion.button
+          type="button"
+          aria-label={playerState === PlayerState.Playing ? "Pause" : "Play"}
+          className="flex h-12 w-12 items-center justify-center rounded-full text-white focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2 focus:ring-offset-gray-900 disabled:pointer-events-none"
+          onClick={togglePlayPause}
+          disabled={isPlayDisabled}
+          whileHover={!isPlayDisabled ? { scale: 1.05 } : undefined}
+          whileTap={!isPlayDisabled ? { scale: 0.95 } : undefined}
+          transition={{ type: "spring", stiffness: 400, damping: 17 }}
+          style={{ backgroundColor: isPlayDisabled ? COLOR_GRAY_600 : COLOR_PURPLE }}
+        >
+          {playerState === PlayerState.Playing ? <Pause size={22} fill="currentColor" /> : playerState === PlayerState.Loading ? <Spinner /> : <Play size={22} fill="currentColor" />}
+        </motion.button>
+
+        <ControlButton icon={<SkipForward size={18} />} label="Next" disabled={isPlayDisabled} />
+        <ControlButton icon={<Repeat size={18} />} label="Repeat" disabled={isPlayDisabled} />
+      </div>
+
+      <div className="mt-8">
+        <VolumeSlider volume={volume} setVolume={setVolume} />
+      </div>
+    </motion.div>
+  );
+}
+ 
